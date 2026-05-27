@@ -4,30 +4,37 @@ import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { isValidOtp } from "@/utils/validators";
 import { confirmOtp, requestOtp } from "@/services/otpService";
+import { aerlotSupabase } from "@/config/supabase";
+import { checkUserStatus, createFirestoreUser, getUserProfile } from "@/services/authService";
+import { db } from "@/config/firebase";
+import { updateDoc } from "firebase/firestore";
+import { AlertTriangle, Lock } from "lucide-react";
+import { useAuthStore } from "@/store/authStore";
 
 interface Props {
   open: boolean;
   email: string;
-  token: string;
-  expiresAt: number;
+  emailExists: boolean;
   onClose: () => void;
   onVerified: () => void;
-  onTokenRefresh: (token: string, expiresAt: number) => void;
 }
 
-export function OTPModal({ open, email, token, expiresAt, onClose, onVerified, onTokenRefresh }: Props) {
+export function OTPModal({ open, email, emailExists, onClose, onVerified }: Props) {
   const [digits, setDigits] = useState<string[]>(Array(6).fill(""));
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(0);
+  const [statusBlock, setStatusBlock] = useState<"suspended" | "deactivated" | null>(null);
+  const [userRef, setUserRef] = useState<any>(null);
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
     if (!open) return;
     setDigits(Array(6).fill(""));
     setResendIn(30);
+    setStatusBlock(null);
     const i = setInterval(() => setResendIn((v) => (v > 0 ? v - 1 : 0)), 1000);
     return () => clearInterval(i);
-  }, [open, token]);
+  }, [open]);
 
   const value = digits.join("");
 
@@ -54,22 +61,112 @@ export function OTPModal({ open, email, token, expiresAt, onClose, onVerified, o
       toast.error("Enter the 6-digit code");
       return;
     }
-    if (Date.now() > expiresAt) {
-      toast.error("Code expired. Request a new one.");
-      return;
-    }
     setLoading(true);
     try {
-      const result = await confirmOtp(email, value, token);
-      if (result.ok) {
-        toast.success("Verified!");
-        onVerified();
-      } else {
-        toast.error(result.error || "Invalid code");
+      const data = await confirmOtp(email, value);
+      const user = data?.user;
+      if (!user) {
+        toast.error("Verification failed");
+        return;
       }
+
+      const uid = user.id;
+      const userEmail = user.email ?? email;
+      const username = (userEmail.split("@")[0] || uid)
+        .replace(/[^a-zA-Z0-9_.-]/g, "")
+        .toLowerCase();
+
+      const seed = `${username}-${Date.now()}`;
+      const imageUrl = `https://api.dicebear.com/6.x/pixel-art/png?seed=${encodeURIComponent(seed)}`;
+
+      // In web, we can use navigator.userAgent or similar for deviceName
+      const deviceName = navigator.userAgent.slice(0, 50);
+
+      // Fetch country using ipinfo (matching user's code)
+      let country = "unknown";
+      try {
+        const resp = await fetch("https://ipinfo.io?token=90883ca1824185");
+        if (resp.ok) {
+          const info = await resp.json();
+          country = info?.country || "unknown";
+        }
+      } catch (err) {
+        console.warn("[Auth] error fetching ipinfo:", err);
+      }
+
+      // Create Firestore doc if new
+      if (!emailExists) {
+        await createFirestoreUser({
+          uid,
+          email: userEmail,
+          username,
+          imageUrl,
+          deviceName,
+          country,
+        });
+      }
+
+      // Check status
+      const statusData = await checkUserStatus(uid);
+      if (statusData) {
+        if (statusData.account_status === 0) {
+          setUserRef(statusData.ref);
+          setStatusBlock("deactivated");
+          setLoading(false);
+          return;
+        }
+        if (statusData.status === 0) {
+          setStatusBlock("suspended");
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Finalize logic logic (matching user's AsyncStorage logic)
+      const sessionInfo = {
+        userId: uid,
+        email: userEmail,
+        username,
+        imageUrl,
+        deviceName,
+        country,
+        loginTime: new Date().toISOString(),
+      };
+      localStorage.setItem("@userSession", JSON.stringify(sessionInfo));
+
+      // Fetch latest profile from Firestore for the store
+      const profile = await getUserProfile(userEmail);
+      if (profile) {
+        useAuthStore.getState().setUser({
+          firstName: profile.firstName,
+          lastName: profile.lastName,
+          username: profile.username,
+          imageUrl: profile.imageUrl,
+        });
+      }
+
+      toast.success("Verified!");
+      onVerified();
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e.message || "Verification failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const reactivateAccount = async () => {
+    if (!userRef) return;
+    setLoading(true);
+    try {
+      await updateDoc(userRef, { account_status: 1 });
+      toast.success("Account reactivated!");
+      setStatusBlock(null);
+      // Re-trigger verify flow logic or just call onVerified
+      onVerified();
     } catch (e) {
       console.error(e);
-      toast.error("Verification failed");
+      toast.error("Failed to reactivate account");
     } finally {
       setLoading(false);
     }
@@ -78,8 +175,7 @@ export function OTPModal({ open, email, token, expiresAt, onClose, onVerified, o
   const resend = async () => {
     if (resendIn > 0) return;
     try {
-      const { token: t, expiresAt: e } = await requestOtp(email);
-      onTokenRefresh(t, e);
+      await requestOtp(email);
       toast.success("New code sent");
       setResendIn(30);
     } catch {
@@ -118,40 +214,88 @@ export function OTPModal({ open, email, token, expiresAt, onClose, onVerified, o
             <p className="mt-2 text-sm text-muted-foreground">
               We sent a 6-digit code to <span className="text-foreground">{email}</span>.
             </p>
-            <div className="mt-6 flex justify-between gap-2" onPaste={handlePaste}>
-              {digits.map((d, i) => (
-                <input
-                  key={i}
-                  ref={(el) => {
-                    inputs.current[i] = el;
-                  }}
-                  value={d}
-                  onChange={(e) => handleChange(i, e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Backspace" && !d && i > 0) inputs.current[i - 1]?.focus();
-                  }}
-                  inputMode="numeric"
-                  maxLength={1}
-                  className="h-14 w-12 rounded-xl border border-white/10 bg-white/[0.03] text-center text-xl font-semibold text-foreground outline-none transition focus:border-primary/60 focus:bg-white/[0.06]"
-                />
-              ))}
-            </div>
-            <button
-              onClick={submit}
-              disabled={loading || value.length !== 6}
-              className="mt-6 w-full rounded-full bg-primary px-6 py-4 font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
-            >
-              {loading ? "Verifying…" : "Verify"}
-            </button>
-            <div className="mt-4 text-center text-sm text-muted-foreground">
-              {resendIn > 0 ? (
-                <span>Resend code in {resendIn}s</span>
-              ) : (
-                <button onClick={resend} className="font-medium text-primary hover:underline">
-                  Resend code
+
+            {statusBlock === "suspended" ? (
+              <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-center">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-500/20">
+                  <Lock className="h-7 w-7 text-red-500" />
+                </div>
+                <h3 className="text-lg font-bold text-foreground">Account Suspended</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Your account was frozen for breaking the Terms and Conditions. Submit an appeal
+                  within 30 days or your account will be deleted.
+                </p>
+                <button
+                  onClick={onClose}
+                  className="mt-6 w-full rounded-full bg-red-500 px-6 py-3 font-semibold text-white transition hover:bg-red-600"
+                >
+                  I Understand
                 </button>
-              )}
-            </div>
+              </div>
+            ) : statusBlock === "deactivated" ? (
+              <div className="mt-6 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-6 text-center">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-yellow-500/20">
+                  <AlertTriangle className="h-7 w-7 text-yellow-500" />
+                </div>
+                <h3 className="text-lg font-bold text-foreground">Account Deactivated</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Your account is currently deactivated. Would you like to reactivate it and
+                  continue?
+                </p>
+                <div className="mt-6 flex flex-col gap-3">
+                  <button
+                    onClick={reactivateAccount}
+                    disabled={loading}
+                    className="w-full rounded-full bg-yellow-500 px-6 py-3 font-semibold text-white transition hover:bg-yellow-600 disabled:opacity-50"
+                  >
+                    {loading ? "Reactivating..." : "Reactivate"}
+                  </button>
+                  <button
+                    onClick={onClose}
+                    className="w-full rounded-full bg-white/5 px-6 py-3 font-semibold text-foreground transition hover:bg-white/10"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="mt-6 flex justify-between gap-2" onPaste={handlePaste}>
+                  {digits.map((d, i) => (
+                    <input
+                      key={i}
+                      ref={(el) => {
+                        inputs.current[i] = el;
+                      }}
+                      value={d}
+                      onChange={(e) => handleChange(i, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Backspace" && !d && i > 0) inputs.current[i - 1]?.focus();
+                      }}
+                      inputMode="numeric"
+                      maxLength={1}
+                      className="h-14 w-12 rounded-xl border border-white/10 bg-white/[0.03] text-center text-xl font-semibold text-foreground outline-none transition focus:border-primary/60 focus:bg-white/[0.06]"
+                    />
+                  ))}
+                </div>
+                <button
+                  onClick={submit}
+                  disabled={loading || value.length !== 6}
+                  className="mt-6 w-full rounded-full bg-primary px-6 py-4 font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {loading ? "Verifying…" : "Verify"}
+                </button>
+                <div className="mt-4 text-center text-sm text-muted-foreground">
+                  {resendIn > 0 ? (
+                    <span>Resend code in {resendIn}s</span>
+                  ) : (
+                    <button onClick={resend} className="font-medium text-primary hover:underline">
+                      Resend code
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </motion.div>
         </motion.div>
       )}

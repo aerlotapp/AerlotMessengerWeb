@@ -3,13 +3,13 @@ import { Mail, X } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { isValidEmail } from "@/utils/validators";
-import { userExistsEverywhere } from "@/services/authService";
+import { existsInFirebase } from "@/services/authService";
 import { requestOtp } from "@/services/otpService";
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  onOtpSent: (email: string, token: string, expiresAt: number) => void;
+  onOtpSent: (email: string, exists: boolean) => void;
 }
 
 export function EmailLoginModal({ open, onClose, onOtpSent }: Props) {
@@ -23,14 +23,10 @@ export function EmailLoginModal({ open, onClose, onOtpSent }: Props) {
     }
     setLoading(true);
     try {
-      const exists = await userExistsEverywhere(email);
-      if (!exists) {
-        toast.error("Account not found");
-        return;
-      }
-      const { token, expiresAt } = await requestOtp(email);
+      const exists = await existsInFirebase(email);
+      await requestOtp(email);
       toast.success("OTP sent to your email");
-      onOtpSent(email, token, expiresAt);
+      onOtpSent(email, exists);
     } catch (e) {
       console.error(e);
       toast.error("Something went wrong. Try again.");

@@ -50,10 +50,10 @@ async function sendResendEmail(to: string, otp: string): Promise<void> {
     body: JSON.stringify({
       from: "Aerlot <onboarding@resend.dev>",
       to: [to],
-      subject: "Your Aerlot Premium+ verification code",
+      subject: "Your Aerlot premium verification code",
       html: `
         <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#0a0a0a;color:#fff;border-radius:16px;">
-          <h1 style="color:#990000;margin:0 0 16px;font-size:24px;">Aerlot Premium+</h1>
+          <h1 style="color:#990000;margin:0 0 16px;font-size:24px;">Aerlot premium</h1>
           <p style="color:#bbb;margin:0 0 24px;">Your verification code is:</p>
           <div style="font-size:36px;font-weight:700;letter-spacing:8px;background:#1a1a1a;padding:20px;border-radius:12px;text-align:center;color:#fff;border:1px solid #990000;">${otp}</div>
           <p style="color:#777;margin:24px 0 0;font-size:13px;">This code expires in 5 minutes.</p>

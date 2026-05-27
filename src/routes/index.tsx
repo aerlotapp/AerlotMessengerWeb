@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { LogOut } from "lucide-react";
 import { PremiumHero } from "@/components/premium/PremiumHero";
 import { FeatureCard } from "@/components/premium/FeatureCard";
 import { ContinueButton } from "@/components/premium/ContinueButton";
@@ -10,19 +11,20 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
 import { usePremiumPlans } from "@/hooks/usePremiumPlans";
 import { useAuthStore } from "@/store/authStore";
+import { getUserProfile } from "@/services/authService";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Aerlot Premium+ — Exclusive premium features" },
+      { title: "Aerlot premium — Exclusive premium features" },
       {
         name: "description",
-        content: "Unlock exclusive premium features and benefits with Aerlot Premium+.",
+        content: "Unlock exclusive premium features and benefits with Aerlot premium.",
       },
-      { property: "og:title", content: "Aerlot Premium+" },
+      { property: "og:title", content: "Aerlot premium" },
       {
         property: "og:description",
-        content: "Unlock exclusive premium features and benefits with Aerlot Premium+.",
+        content: "Unlock exclusive premium features and benefits with Aerlot premium.",
       },
     ],
   }),
@@ -32,15 +34,63 @@ export const Route = createFileRoute("/")({
 function HomePage() {
   const navigate = useNavigate();
   const { features, loading, error } = usePremiumPlans();
-  const { setEmail, setAuthenticated } = useAuthStore();
+  const { setEmail, setAuthenticated, setUser, isAuthenticated, logout } = useAuthStore();
 
   const [showEmail, setShowEmail] = useState(false);
-  const [otpState, setOtpState] = useState<
-    { open: boolean; email: string; token: string; expiresAt: number } | null
-  >(null);
+  const [otpState, setOtpState] = useState<{
+    open: boolean;
+    email: string;
+    exists: boolean;
+  } | null>(null);
+
+  // Initialize app - check for existing session in localStorage
+  useEffect(() => {
+    const storedSession = localStorage.getItem("@userSession");
+    if (storedSession) {
+      try {
+        const session = JSON.parse(storedSession);
+        console.log("✅ Found stored session for:", session.email);
+        setEmail(session.email);
+        setAuthenticated(true);
+
+        // Fetch latest profile to keep UI in sync
+        getUserProfile(session.email).then((profile) => {
+          if (profile) {
+            setUser({
+              uid: profile.uid,
+              firstName: profile.firstName,
+              lastName: profile.lastName,
+              username: profile.username,
+              imageUrl: profile.imageUrl,
+            });
+          }
+        });
+      } catch (err) {
+        console.warn("⚠️ Error parsing stored session:", err);
+      }
+    }
+  }, [setEmail, setAuthenticated, setUser]);
+
+  const handleContinue = () => {
+    if (isAuthenticated) {
+      navigate({ to: "/premium" });
+    } else {
+      setShowEmail(true);
+    }
+  };
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-background">
+      {/* Logout button */}
+      {isAuthenticated && (
+        <button
+          onClick={() => logout()}
+          className="absolute right-6 top-6 z-50 flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
+        >
+          <LogOut className="h-4 w-4" /> Logout
+        </button>
+      )}
+
       {/* Background glow */}
       <div className="pointer-events-none absolute inset-0 -z-10">
         <div className="absolute left-1/2 top-0 h-[500px] w-[800px] -translate-x-1/2 rounded-full bg-primary/20 blur-[120px]" />
@@ -69,7 +119,7 @@ function HomePage() {
         </section>
 
         <div className="mx-auto mt-14 max-w-md">
-          <ContinueButton onClick={() => setShowEmail(true)} />
+          <ContinueButton onClick={handleContinue} />
           <p className="mt-4 text-center text-xs text-muted-foreground">
             By continuing you agree to Aerlot's Terms and Privacy Policy.
           </p>
@@ -79,9 +129,9 @@ function HomePage() {
       <EmailLoginModal
         open={showEmail}
         onClose={() => setShowEmail(false)}
-        onOtpSent={(email, token, expiresAt) => {
+        onOtpSent={(email, exists) => {
           setShowEmail(false);
-          setOtpState({ open: true, email, token, expiresAt });
+          setOtpState({ open: true, email, exists });
         }}
       />
 
@@ -89,16 +139,27 @@ function HomePage() {
         <OTPModal
           open={otpState.open}
           email={otpState.email}
-          token={otpState.token}
-          expiresAt={otpState.expiresAt}
+          emailExists={otpState.exists}
           onClose={() => setOtpState(null)}
-          onTokenRefresh={(token, expiresAt) =>
-            setOtpState((s) => (s ? { ...s, token, expiresAt } : s))
-          }
           onVerified={() => {
-            setEmail(otpState.email);
+            const currentEmail = otpState.email;
+            setEmail(currentEmail);
             setAuthenticated(true);
             setOtpState(null);
+
+            // Sync profile immediately to get UID
+            getUserProfile(currentEmail).then((profile) => {
+              if (profile) {
+                setUser({
+                  uid: profile.uid,
+                  firstName: profile.firstName,
+                  lastName: profile.lastName,
+                  username: profile.username,
+                  imageUrl: profile.imageUrl,
+                });
+              }
+            });
+
             navigate({ to: "/premium" });
           }}
         />

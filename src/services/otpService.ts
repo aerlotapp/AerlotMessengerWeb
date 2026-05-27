@@ -1,5 +1,19 @@
-import { sendOtp, verifyOtp } from "@/lib/otp.functions";
+import { aerlotSupabase } from "@/config/supabase";
 
-export const requestOtp = (email: string) => sendOtp({ data: { email } });
-export const confirmOtp = (email: string, otp: string, token: string) =>
-  verifyOtp({ data: { email, otp, token } });
+export const requestOtp = async (email: string) => {
+  const { data, error } = await aerlotSupabase.auth.signInWithOtp({
+    email,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const confirmOtp = async (email: string, otp: string) => {
+  const { data, error } = await aerlotSupabase.auth.verifyOtp({
+    email,
+    token: otp,
+    type: "email",
+  });
+  if (error) throw error;
+  return data;
+};

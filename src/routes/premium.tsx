@@ -1,6 +1,6 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, LogOut } from "lucide-react";
 import toast from "react-hot-toast";
 import { PricingCard } from "@/components/premium/PricingCard";
 import { Loader } from "@/components/common/Loader";
@@ -8,13 +8,14 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
 import { usePremiumPlans } from "@/hooks/usePremiumPlans";
 import { useAuthStore } from "@/store/authStore";
-import { initializePayment } from "@/services/paymentService";
+import { usePaystackPayment } from "react-paystack";
+import { savePremiumTransaction, initializePayment } from "@/services/paymentService";
 
 export const Route = createFileRoute("/premium")({
   head: () => ({
     meta: [
-      { title: "Choose your plan — Aerlot Premium+" },
-      { name: "description", content: "Pick the Aerlot Premium+ plan that fits you." },
+      { title: "Choose your plan — Aerlot premium" },
+      { name: "description", content: "Pick the Aerlot premium plan that fits you." },
     ],
   }),
   beforeLoad: () => {
@@ -34,25 +35,66 @@ export const Route = createFileRoute("/premium")({
 function PremiumPage() {
   const navigate = useNavigate();
   const { plans, loading, error } = usePremiumPlans();
-  const { selectedPlan, setSelectedPlan, email } = useAuthStore();
+  const { selectedPlan, setSelectedPlan, email, user, logout } = useAuthStore();
 
   const active = plans.filter((p) => p.isActive);
 
-  const checkout = async () => {
+  const config = {
+    reference: `aerlot_${Date.now()}`,
+    email: email || "",
+    amount: (selectedPlan?.price || 0) * 100, // Amount in kobo
+    publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string,
+  };
+
+  const initializePaystack = usePaystackPayment(config);
+
+  const onSuccess = async (reference: any) => {
+    if (!selectedPlan || !user) return;
+    try {
+      await savePremiumTransaction({
+        userId: user.uid || "",
+        email: email || "",
+        plan: selectedPlan,
+        reference: reference.reference,
+      });
+      toast.success("Payment successful! Your premium plan is now active.");
+      // Optionally navigate away or refresh state
+    } catch {
+      toast.error("Payment was successful but we couldn't activate your plan automatically. Please contact support.");
+    }
+  };
+
+  const onClose = () => {
+    toast.error("Payment cancelled");
+  };
+
+  const checkout = () => {
     if (!selectedPlan || !email) {
       toast.error("Select a plan first");
       return;
     }
-    try {
-      const { reference } = await initializePayment({ email, plan: selectedPlan });
-      toast.success(`Payment initialized (${reference.slice(0, 12)}…)`);
-    } catch {
-      toast.error("Could not start payment");
-    }
+    // @ts-ignore - react-paystack types can be tricky
+    initializePaystack({ onSuccess, onClose });
   };
+
+  const displayName =
+    (user?.firstName || user?.lastName
+      ? `${user.firstName || ""} ${user.lastName || ""}`.trim()
+      : user?.username || email) ?? "Guest";
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-background">
+      {/* Logout button */}
+      <button
+        onClick={() => {
+          logout();
+          navigate({ to: "/" });
+        }}
+        className="absolute right-6 top-6 z-50 flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
+      >
+        <LogOut className="h-4 w-4" /> Logout
+      </button>
+
       <div className="pointer-events-none absolute inset-0 -z-10">
         <div className="absolute left-1/2 top-0 h-[500px] w-[900px] -translate-x-1/2 rounded-full bg-primary/15 blur-[140px]" />
       </div>
@@ -68,13 +110,27 @@ function PremiumPage() {
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center"
+          className="flex flex-col items-center text-center"
         >
+          {user?.imageUrl && (
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="mb-6 h-20 w-20 overflow-hidden rounded-full border-2 border-primary/20 bg-primary/10 p-1 shadow-2xl ring-4 ring-primary/5"
+            >
+              <img
+                src={user.imageUrl}
+                alt={displayName}
+                className="h-full w-full rounded-full object-cover"
+              />
+            </motion.div>
+          )}
+
           <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
-            Choose your <span className="text-primary">Premium+</span> plan
+            Choose your <span className="text-primary">premium</span> plan
           </h1>
           <p className="mt-3 text-muted-foreground">
-            Flexible plans. Cancel anytime. Welcome back, {email}.
+            Flexible plans. Cancel anytime. Welcome back, {displayName}.
           </p>
         </motion.div>
 
