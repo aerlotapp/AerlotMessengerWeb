@@ -7,6 +7,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
+import { Toaster } from "react-hot-toast";
 
 import appCss from "../styles.css?url";
 
@@ -115,6 +116,16 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          style: {
+            background: "hsl(0 0% 10%)",
+            color: "#fff",
+            border: "1px solid rgba(255,255,255,0.08)",
+          },
+        }}
+      />
     </QueryClientProvider>
   );
 }
