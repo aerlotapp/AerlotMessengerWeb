@@ -9,7 +9,10 @@ import { ErrorState } from "@/components/common/ErrorState";
 import { usePremiumPlans } from "@/hooks/usePremiumPlans";
 import { useAuthStore } from "@/store/authStore";
 import { usePaystackPayment } from "react-paystack";
-import { savePremiumTransaction, initializePayment } from "@/services/paymentService";
+import { savePremiumTransaction, initializePayment, checkSubscriptionStatus, type SubscriptionStatus } from "@/services/paymentService";
+import { useState, useEffect } from "react";
+import { CheckCircle2, Calendar } from "lucide-react";
+import { format } from "date-fns";
 
 export const Route = createFileRoute("/premium")({
   head: () => ({
@@ -36,6 +39,24 @@ function PremiumPage() {
   const navigate = useNavigate();
   const { plans, loading, error } = usePremiumPlans();
   const { selectedPlan, setSelectedPlan, email, user, logout } = useAuthStore();
+  const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
+  const [checkingSubscription, setCheckingSubscription] = useState(true);
+
+  useEffect(() => {
+    if (user?.uid) {
+      setCheckingSubscription(true);
+      checkSubscriptionStatus(user.uid)
+        .then((status) => {
+          console.log("[Premium] Subscription status checked:", status);
+          setSubscription(status);
+        })
+        .finally(() => {
+          setCheckingSubscription(false);
+        });
+    } else {
+      setCheckingSubscription(false);
+    }
+  }, [user?.uid]);
 
   const active = plans.filter((p) => p.isActive);
 
@@ -58,8 +79,12 @@ function PremiumPage() {
         reference: reference.reference,
       });
       toast.success("Payment successful! Your premium plan is now active.");
-      // Optionally navigate away or refresh state
-    } catch {
+
+      // Refresh subscription status immediately to show the success UI
+      const status = await checkSubscriptionStatus(user.uid || "");
+      setSubscription(status);
+    } catch (error) {
+      console.error("[Premium] Error after payment success:", error);
       toast.error("Payment was successful but we couldn't activate your plan automatically. Please contact support.");
     }
   };
@@ -135,10 +160,60 @@ function PremiumPage() {
         </motion.div>
 
         <section className="mt-14">
-          {loading && <Loader label="Loading plans…" />}
-          {error && !loading && <ErrorState message={error} />}
-          {!loading && !error && active.length === 0 && <EmptyState title="No plans available" />}
-          {!loading && !error && active.length > 0 && (
+          {checkingSubscription || loading ? (
+            <Loader label="Checking status…" />
+          ) : error ? (
+            <ErrorState message={error} />
+          ) : subscription?.isActive ? (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="mx-auto max-w-2xl overflow-hidden rounded-3xl border border-primary/20 bg-primary/5 p-8 text-center shadow-xl backdrop-blur-sm"
+            >
+              <div className="mb-6 flex justify-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/20 ring-8 ring-primary/5">
+                  <CheckCircle2 className="h-8 w-8 text-primary" />
+                </div>
+              </div>
+              <h2 className="text-2xl font-bold text-foreground">Premium Active</h2>
+              <p className="mt-2 text-muted-foreground">
+                You are currently on the <span className="font-semibold text-foreground">{subscription.planName}</span> plan.
+              </p>
+
+              <div className="mt-8 flex flex-col items-center gap-4 rounded-2xl bg-white/5 p-6 sm:flex-row sm:justify-around">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+                    <Calendar className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-xs uppercase tracking-wider text-muted-foreground">Expires on</p>
+                    <p className="font-medium text-foreground">
+                      {subscription.expiresAt ? format(subscription.expiresAt, "MMMM dd, yyyy") : "N/A"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="h-px w-full bg-white/10 sm:h-12 sm:w-px" />
+
+                <div className="text-left">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">Status</p>
+                  <div className="flex items-center gap-2 font-medium text-primary">
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75"></span>
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-primary"></span>
+                    </span>
+                    Active
+                  </div>
+                </div>
+              </div>
+
+              <p className="mt-8 text-sm text-muted-foreground italic">
+                Subscription options are hidden while your premium plan is active to prevent duplicate purchases.
+              </p>
+            </motion.div>
+          ) : active.length === 0 ? (
+            <EmptyState title="No plans available" />
+          ) : (
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
               {active.map((p, i) => (
                 <PricingCard
@@ -153,7 +228,7 @@ function PremiumPage() {
           )}
         </section>
 
-        {selectedPlan && (
+        {selectedPlan && !subscription?.isActive && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
