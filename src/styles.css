@@ -1,5 +1,4 @@
-@import "tailwindcss" source(none);
-@source "../src";
+@import "tailwindcss";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
@@ -67,11 +66,20 @@
 }
 
 @layer base {
-  * {
+
+  *,
+  ::after,
+  ::before {
+    box-sizing: border-box;
     border-color: var(--color-border);
   }
 
-  html, body {
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
     background-color: var(--color-background);
     color: var(--color-foreground);
     -webkit-font-smoothing: antialiased;
