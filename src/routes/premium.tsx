@@ -1,4 +1,4 @@
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { ArrowLeft, LogOut } from "lucide-react";
 import toast from "react-hot-toast";
@@ -19,14 +19,11 @@ import { useState, useEffect } from "react";
 import { CheckCircle2, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { Footer } from "@/components/common/Footer";
+import { Route as rootRoute } from "./__root";
 
-export const Route = createFileRoute("/premium")({
-  head: () => ({
-    meta: [
-      { title: "Choose your plan — Aerlot premium" },
-      { name: "description", content: "Pick the Aerlot premium plan that fits you." },
-    ],
-  }),
+export const Route = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/premium",
   beforeLoad: () => {
     if (typeof window === "undefined") return;
     const raw = window.localStorage.getItem("aerlot-auth");

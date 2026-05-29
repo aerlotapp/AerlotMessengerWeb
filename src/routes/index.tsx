@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { LogOut } from "lucide-react";
 import { PremiumHero } from "@/components/premium/PremiumHero";
@@ -13,22 +13,11 @@ import { usePremiumPlans } from "@/hooks/usePremiumPlans";
 import { useAuthStore } from "@/store/authStore";
 import { getUserProfile } from "@/services/authService";
 import { Footer } from "@/components/common/Footer";
+import { Route as rootRoute } from "./__root";
 
-export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "Aerlot premium — Exclusive premium features" },
-      {
-        name: "description",
-        content: "Unlock exclusive premium features and benefits with Aerlot premium.",
-      },
-      { property: "og:title", content: "Aerlot premium" },
-      {
-        property: "og:description",
-        content: "Unlock exclusive premium features and benefits with Aerlot premium.",
-      },
-    ],
-  }),
+export const Route = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/",
   component: HomePage,
 });
 
