@@ -10,6 +10,7 @@ import {
 import { Toaster } from "react-hot-toast";
 
 import appCss from "../styles.css?url";
+import adaptiveIcon from "@/assets/images/adaptive-icon.png";
 
 function NotFoundComponent() {
   return (
@@ -86,6 +87,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         rel: "stylesheet",
         href: appCss,
+      },
+      {
+        rel: "icon",
+        type: "image/png",
+        href: adaptiveIcon,
+      },
+      {
+        rel: "apple-touch-icon",
+        href: adaptiveIcon,
       },
     ],
   }),

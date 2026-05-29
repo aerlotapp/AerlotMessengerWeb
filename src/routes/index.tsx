@@ -12,6 +12,7 @@ import { ErrorState } from "@/components/common/ErrorState";
 import { usePremiumPlans } from "@/hooks/usePremiumPlans";
 import { useAuthStore } from "@/store/authStore";
 import { getUserProfile } from "@/services/authService";
+import { Footer } from "@/components/common/Footer";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -121,7 +122,16 @@ function HomePage() {
         <div className="mx-auto mt-14 max-w-md">
           <ContinueButton onClick={handleContinue} />
           <p className="mt-4 text-center text-xs text-muted-foreground">
-            By continuing you agree to Aerlot's Terms and Privacy Policy.
+            By continuing you agree to Aerlot's{" "}
+            <a
+              href="https://aerlotapp.github.io/AerlotMessengerPrivacyPolicy/"
+              className="underline hover:text-foreground transition-colors"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Terms and Privacy Policy
+            </a>
+            .
           </p>
         </div>
       </div>
@@ -164,6 +174,7 @@ function HomePage() {
           }}
         />
       )}
+      <Footer />
     </main>
   );
 }

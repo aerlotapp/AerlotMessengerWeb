@@ -9,10 +9,16 @@ import { ErrorState } from "@/components/common/ErrorState";
 import { usePremiumPlans } from "@/hooks/usePremiumPlans";
 import { useAuthStore } from "@/store/authStore";
 import { usePaystackPayment } from "react-paystack";
-import { savePremiumTransaction, initializePayment, checkSubscriptionStatus, type SubscriptionStatus } from "@/services/paymentService";
+import {
+  savePremiumTransaction,
+  initializePayment,
+  checkSubscriptionStatus,
+  type SubscriptionStatus,
+} from "@/services/paymentService";
 import { useState, useEffect } from "react";
 import { CheckCircle2, Calendar } from "lucide-react";
 import { format } from "date-fns";
+import { Footer } from "@/components/common/Footer";
 
 export const Route = createFileRoute("/premium")({
   head: () => ({
@@ -85,7 +91,9 @@ function PremiumPage() {
       setSubscription(status);
     } catch (error) {
       console.error("[Premium] Error after payment success:", error);
-      toast.error("Payment was successful but we couldn't activate your plan automatically. Please contact support.");
+      toast.error(
+        "Payment was successful but we couldn't activate your plan automatically. Please contact support.",
+      );
     }
   };
 
@@ -177,7 +185,8 @@ function PremiumPage() {
               </div>
               <h2 className="text-2xl font-bold text-foreground">Premium Active</h2>
               <p className="mt-2 text-muted-foreground">
-                You are currently on the <span className="font-semibold text-foreground">{subscription.planName}</span> plan.
+                You are currently on the{" "}
+                <span className="font-semibold text-foreground">{subscription.planName}</span> plan.
               </p>
 
               <div className="mt-8 flex flex-col items-center gap-4 rounded-2xl bg-white/5 p-6 sm:flex-row sm:justify-around">
@@ -186,9 +195,13 @@ function PremiumPage() {
                     <Calendar className="h-5 w-5 text-primary" />
                   </div>
                   <div className="text-left">
-                    <p className="text-xs uppercase tracking-wider text-muted-foreground">Expires on</p>
+                    <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Expires on
+                    </p>
                     <p className="font-medium text-foreground">
-                      {subscription.expiresAt ? format(subscription.expiresAt, "MMMM dd, yyyy") : "N/A"}
+                      {subscription.expiresAt
+                        ? format(subscription.expiresAt, "MMMM dd, yyyy")
+                        : "N/A"}
                     </p>
                   </div>
                 </div>
@@ -208,7 +221,8 @@ function PremiumPage() {
               </div>
 
               <p className="mt-8 text-sm text-muted-foreground italic">
-                Subscription options are hidden while your premium plan is active to prevent duplicate purchases.
+                Subscription options are hidden while your premium plan is active to prevent
+                duplicate purchases.
               </p>
             </motion.div>
           ) : active.length === 0 ? (
@@ -243,6 +257,7 @@ function PremiumPage() {
           </motion.div>
         )}
       </div>
+      <Footer />
     </main>
   );
 }
