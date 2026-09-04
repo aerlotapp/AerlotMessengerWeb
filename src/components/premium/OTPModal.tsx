@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { isValidOtp } from "@/utils/validators";
 import { confirmOtp, requestOtp } from "@/services/otpService";
 import { aerlotSupabase } from "@/config/supabase";
+import { establishFirebaseAuth } from "@/services/firebaseAuthBridge";
 import { checkUserStatus, createFirestoreUser, getUserProfile } from "@/services/authService";
 import { db } from "@/config/firebase";
 import { updateDoc } from "firebase/firestore";
@@ -68,6 +69,16 @@ export function OTPModal({ open, email, emailExists, onClose, onVerified }: Prop
       if (!user) {
         toast.error("Verification failed");
         return;
+      }
+
+      // ── Firebase Auth Bridge ──────────────────────────────────────────
+      // Exchange the fresh Supabase access_token for a Firebase custom token
+      // so Firestore reads on the Premium page see request.auth != null.
+      const supabaseAccessToken = data?.session?.access_token;
+      if (supabaseAccessToken) {
+        await establishFirebaseAuth(supabaseAccessToken);
+      } else {
+        console.warn("[OTPModal] No Supabase session access_token — Firebase Auth not established.");
       }
 
       const uid = user.id;
@@ -146,7 +157,7 @@ export function OTPModal({ open, email, emailExists, onClose, onVerified }: Prop
       }
 
       toast.success("Verified!");
-      onVerified();
+      onVerified(); // navigates to /premium — Firebase Auth is now active
     } catch (e: any) {
       console.error(e);
       toast.error(e.message || "Verification failed");

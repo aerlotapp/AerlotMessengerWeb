@@ -12,6 +12,8 @@ import { ErrorState } from "@/components/common/ErrorState";
 import { usePremiumPlans } from "@/hooks/usePremiumPlans";
 import { useAuthStore } from "@/store/authStore";
 import { getUserProfile } from "@/services/authService";
+import { establishFirebaseAuth } from "@/services/firebaseAuthBridge";
+import { aerlotSupabase } from "@/config/supabase";
 import { Footer } from "@/components/common/Footer";
 import { Route as rootRoute } from "./__root";
 
@@ -53,6 +55,21 @@ function HomePage() {
               username: profile.username,
               imageUrl: profile.imageUrl,
             });
+          }
+        });
+
+        // ── Firebase Auth Bridge (session restore) ───────────────────────
+        // Re-establish Firebase Auth from the live Supabase session so that
+        // returning users (page reload) also pass Firestore's isAuthenticated()
+        // check without going through OTP again.
+        aerlotSupabase.auth.getSession().then(({ data }) => {
+          const accessToken = data?.session?.access_token;
+          if (accessToken) {
+            establishFirebaseAuth(accessToken).catch((err) =>
+              console.warn("[HomePage] Firebase Auth restore failed:", err),
+            );
+          } else {
+            console.warn("[HomePage] Supabase session expired on restore — Firebase Auth not re-established.");
           }
         });
       } catch (err) {

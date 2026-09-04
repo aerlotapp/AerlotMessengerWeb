@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { PremiumPlan } from "@/types/premium";
+import { signOutFirebaseAuth } from "@/services/firebaseAuthBridge";
 
 interface AuthState {
   email: string | null;
@@ -33,9 +34,14 @@ export const useAuthStore = create<AuthState>()(
       setSelectedPlan: (p) => set({ selectedPlan: p }),
       logout: () => {
         localStorage.removeItem("@userSession");
+        // Sign out of Firebase Auth so Firestore sees request.auth == null again
+        signOutFirebaseAuth().catch((err) =>
+          console.warn("[authStore] Firebase sign-out failed:", err),
+        );
         set({ email: null, isAuthenticated: false, user: null, selectedPlan: null });
       },
     }),
     { name: "aerlot-auth" },
   ),
 );
+
