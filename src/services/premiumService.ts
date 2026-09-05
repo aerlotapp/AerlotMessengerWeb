@@ -1,5 +1,5 @@
 import { collection, getDocs } from "firebase/firestore";
-import { db } from "@/config/firebase";
+import { db, auth } from "@/config/firebase";
 import type { PremiumPlan, PremiumFeature } from "@/types/premium";
 
 const COLLECTION = "AerlotPremiumPrice";
@@ -28,7 +28,11 @@ export const DEFAULT_FEATURES: PremiumFeature[] = [
 ];
 
 export async function fetchPremiumPlans(): Promise<PremiumPlan[]> {
+  if (!auth.currentUser) {
+    return [];
+  }
   const snap = await getDocs(collection(db, COLLECTION));
+
   const plans: PremiumPlan[] = [];
   snap.forEach((doc) => {
     const data = doc.data() as Partial<PremiumPlan>;

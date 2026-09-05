@@ -1,4 +1,4 @@
-import { db } from "@/config/firebase";
+import { db, auth } from "@/config/firebase";
 import type { PremiumPlan } from "@/types/premium";
 import { addDoc, collection, serverTimestamp, query, where, orderBy, limit, getDocs, Timestamp } from "firebase/firestore";
 import { addDays, addWeeks, addMonths, addYears, isAfter } from "date-fns";
@@ -11,7 +11,11 @@ export interface SubscriptionStatus {
 }
 
 export async function checkSubscriptionStatus(userId: string): Promise<SubscriptionStatus> {
+  if (!auth.currentUser) {
+    return { isActive: false, expiresAt: null, planName: null };
+  }
   try {
+
     // We simplify the query to avoid needing a composite index for (userId, status, createdAt)
     // fetching all active records for this user and finding the valid one in memory is more robust.
     const q = query(

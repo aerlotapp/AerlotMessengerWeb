@@ -1,18 +1,22 @@
 import { collection, getDocs, limit, query, where } from "firebase/firestore";
-import { db } from "@/config/firebase";
+import { db, auth } from "@/config/firebase";
 import { aerlotSupabase } from "@/config/supabase";
 
 /**
  * Check if the email exists in Firestore "users" collection.
+ * Falls back to Supabase lookup when Firebase Auth is not active.
  */
 export async function existsInFirebase(email: string): Promise<boolean> {
+  if (!auth.currentUser) {
+    return existsInSupabase(email);
+  }
   try {
     const q = query(collection(db, "users"), where("email", "==", email.toLowerCase()), limit(1));
     const snap = await getDocs(q);
     return !snap.empty;
   } catch (err) {
-    console.error("Firebase lookup failed", err);
-    return false;
+    console.warn("[authService] Firebase lookup skipped/failed:", err);
+    return existsInSupabase(email);
   }
 }
 
@@ -46,6 +50,9 @@ export async function userExistsEverywhere(email: string): Promise<boolean> {
  * Check user status from Firestore (account_status and status).
  */
 export async function checkUserStatus(uid: string) {
+  if (!auth.currentUser) {
+    return null;
+  }
   try {
     const q = query(collection(db, "users"), where("uid", "==", uid), limit(1));
     const snap = await getDocs(q);
@@ -105,6 +112,9 @@ export async function createFirestoreUser(params: {
  * Fetch the complete user profile from Firestore by email.
  */
 export async function getUserProfile(email: string) {
+  if (!auth.currentUser) {
+    return null;
+  }
   try {
     const q = query(collection(db, "users"), where("email", "==", email.toLowerCase()), limit(1));
     const snap = await getDocs(q);
@@ -117,3 +127,4 @@ export async function getUserProfile(email: string) {
     return null;
   }
 }
+

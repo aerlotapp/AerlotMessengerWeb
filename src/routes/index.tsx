@@ -45,33 +45,37 @@ function HomePage() {
         setEmail(session.email);
         setAuthenticated(true);
 
-        // Fetch latest profile to keep UI in sync
-        getUserProfile(session.email).then((profile) => {
-          if (profile) {
-            setUser({
-              uid: profile.uid,
-              firstName: profile.firstName,
-              lastName: profile.lastName,
-              username: profile.username,
-              imageUrl: profile.imageUrl,
-            });
-          }
-        });
-
         // ── Firebase Auth Bridge (session restore) ───────────────────────
         // Re-establish Firebase Auth from the live Supabase session so that
         // returning users (page reload) also pass Firestore's isAuthenticated()
-        // check without going through OTP again.
+        // check before fetching user profile.
         aerlotSupabase.auth.getSession().then(({ data }) => {
           const accessToken = data?.session?.access_token;
           if (accessToken) {
-            establishFirebaseAuth(accessToken).catch((err) =>
-              console.warn("[HomePage] Firebase Auth restore failed:", err),
-            );
+            establishFirebaseAuth(accessToken)
+              .then((success) => {
+                if (success) {
+                  getUserProfile(session.email).then((profile) => {
+                    if (profile) {
+                      setUser({
+                        uid: profile.uid,
+                        firstName: profile.firstName,
+                        lastName: profile.lastName,
+                        username: profile.username,
+                        imageUrl: profile.imageUrl,
+                      });
+                    }
+                  });
+                }
+              })
+              .catch((err) =>
+                console.warn("[HomePage] Firebase Auth restore failed:", err),
+              );
           } else {
             console.warn("[HomePage] Supabase session expired on restore — Firebase Auth not re-established.");
           }
         });
+
       } catch (err) {
         console.warn("⚠️ Error parsing stored session:", err);
       }
