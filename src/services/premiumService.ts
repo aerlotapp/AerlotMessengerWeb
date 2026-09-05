@@ -4,6 +4,29 @@ import type { PremiumPlan, PremiumFeature } from "@/types/premium";
 
 const COLLECTION = "AerlotPremiumPrice";
 
+export const DEFAULT_FEATURES: PremiumFeature[] = [
+  {
+    title: "Verified Badge",
+    description: "Display an official verified badge on your profile and in all chats.",
+    icon: "verified",
+  },
+  {
+    title: "Exclusive Features",
+    description: "Unlock special customization options, custom badges, and exclusive themes.",
+    icon: "sparkles",
+  },
+  {
+    title: "Privacy Controls",
+    description: "Advanced privacy protection including screenshot blocking and incognito options.",
+    icon: "eye-off",
+  },
+  {
+    title: "Priority Perks",
+    description: "High-priority support, automatic group permissions, and early feature access.",
+    icon: "crown",
+  },
+];
+
 export async function fetchPremiumPlans(): Promise<PremiumPlan[]> {
   const snap = await getDocs(collection(db, COLLECTION));
   const plans: PremiumPlan[] = [];
@@ -37,3 +60,4 @@ export function mergeFeatures(plans: PremiumPlan[]): PremiumFeature[] {
   }
   return Array.from(seen.values());
 }
+
